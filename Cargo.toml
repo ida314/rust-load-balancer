@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { version = "1.38", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
-
+tokio   = { version = "1", features = ["full"] }
+hyper   = { version = "0.14", features = ["full"] }   # enables hyper::server
+tower   = { version = "0.4", features = ["util"] }    # ServiceExt (optional)
+anyhow  = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+futures = "0.3"                                       # if I keep BoxFuture
+thiserror = "1.0"
