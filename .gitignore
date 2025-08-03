@@ -1,3 +1,30 @@
+# Binaries and build artifacts
 /target
 **/*.rs.bk
-Cargo.lock
+
+# Dependency lock for other languages 
+/Cargo.lock
+
+# IDE/editor settings
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs, coverage, and temp files
+*.log
+*.tmp
+*.bak
+*.old
+
+# By-products from benchmarking or profiling
+perf.data
+heaptrack.out*
+flamegraph.svg
+
+# dotenv 
+.env
+.env.*
