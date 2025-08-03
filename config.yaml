@@ -1,0 +1,45 @@
+# config.yaml - Example Load Balancer Configuration
+
+# Load balancing algorithm
+load_balancer:
+  algorithm: "round_robin"
+
+# Backend servers
+backends:
+  - url: "http://localhost:8001"
+    weight: 1
+    max_connections: 100
+    
+  - url: "http://localhost:8002"
+    weight: 2
+    max_connections: 100
+    
+  - url: "http://localhost:8003"
+    weight: 1
+    max_connections: 100
+
+# Health check configuration
+health_check:
+  interval_secs: 10        # How often to check backend health
+  timeout_secs: 3          # Timeout for health check requests
+  unhealthy_threshold: 3   # Consecutive failures before marking unhealthy
+  healthy_threshold: 2     # Consecutive successes before marking healthy
+  path: "/health"          # Health check endpoint path
+
+# Circuit breaker configuration
+circuit_breaker:
+  failure_threshold: 5     # Failures before opening circuit
+  success_threshold: 2     # Successes in half-open before closing
+  timeout_secs: 60        # Time to wait before half-open state
+
+# Retry configuration
+retry:
+  max_attempts: 3         # Maximum retry attempts
+  backoff_base_ms: 100    # Base backoff time in milliseconds
+  backoff_max_ms: 5000    # Maximum backoff time
+
+# Metrics configuration
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
