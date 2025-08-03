@@ -1,14 +1,67 @@
 [package]
 name = "rust-load-balancer"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-tokio   = { version = "1", features = ["full"] }
-hyper   = { version = "0.14", features = ["full"] }   # enables hyper::server
-tower   = { version = "0.4", features = ["util"] }    # ServiceExt (optional)
-anyhow  = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
-futures = "0.3"                                       # if I keep BoxFuture
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP
+hyper = { version = "0.14", features = ["full"] }
+hyper-tls = "0.5"
+
+# Service utilities
+tower = { version = "0.4", features = ["full"] }
+
+# Error handling
+anyhow = "1"
 thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Configuration
+config = "0.13"
+
+# Metrics
+prometheus = "0.13"
+
+# Time handling
+chrono = "0.4"
+
+# HTTP client for health checks
+reqwest = { version = "0.11", features = ["json"] }
+
+# Concurrent data structures
+dashmap = "5.5"
+arc-swap = "1.6"
+
+# URL parsing
+url = "2.4"
+
+# For weighted random selection
+rand = "0.8"
+
+# UUID for request tracing
+uuid = { version = "1.6", features = ["v4"] }
+
+[dev-dependencies]
+mockito = "1.2"
+proptest = "1.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+opt-level = 3
