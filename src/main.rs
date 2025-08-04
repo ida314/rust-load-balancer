@@ -82,17 +82,18 @@ async fn start_metrics_server(
     path: String,
 ) -> Result<()> {
     let registry = Arc::new(registry);
-    let path = Arc::new(path);
-    
+    let metrics_path = Arc::new(path); // keep this for logging
+    let service_path = metrics_path.clone(); // clone for the service closure
+
     let make_service = hyper::service::make_service_fn(move |_| {
         let registry = registry.clone();
-        let path = path.clone();
-        
+        let path = service_path.clone();
+
         async move {
             Ok::<_, Infallible>(hyper::service::service_fn(move |req: Request<Body>| {
                 let registry = registry.clone();
                 let path = path.clone();
-                
+
                 async move {
                     if req.uri().path() == path.as_str() {
                         let metrics = registry.gather();
@@ -115,19 +116,24 @@ async fn start_metrics_server(
             }))
         }
     });
-    
+
     let server = Server::bind(&addr).serve(make_service);
-    
-    info!("Metrics server listening on http://{}{}", addr, path.as_str());
-    
+
+    info!(
+        "Metrics server listening on http://{}{}",
+        addr,
+        metrics_path.as_str()
+    );
+
     tokio::spawn(async move {
         if let Err(e) = server.await {
             error!("Metrics server error: {}", e);
         }
     });
-    
+
     Ok(())
 }
+
 
 // Graceful shutdown handler
 async fn shutdown_signal() {
