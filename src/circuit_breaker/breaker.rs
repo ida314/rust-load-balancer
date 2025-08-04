@@ -4,7 +4,7 @@ use crate::config::CircuitBreakerConfig;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, Instant};
+use tokio::time::{Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CircuitBreakerState {
