@@ -52,10 +52,6 @@ pub struct LoadBalancerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum LoadBalancerAlgorithm {
     RoundRobin,
-    LeastConnections,
-    Weighted,
-    Random,
-    IpHash,
 }
 
 fn default_algorithm() -> LoadBalancerAlgorithm {
