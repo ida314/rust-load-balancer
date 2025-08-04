@@ -6,7 +6,7 @@ use crate::{
     circuit_breaker::{CircuitBreakerManager},
     config::Config,
     health::HealthChecker,
-    load_balancer::{self, LoadBalancerType},
+    load_balancer,
     metrics::{MetricsCollector, Timer},
     proxy::{Backend, BackendPool},
     retry::{RetryStrategy, RetryDecision},
@@ -23,7 +23,7 @@ use uuid::Uuid;
 pub struct Proxy {
     config: Config,
     pool: Arc<BackendPool>,
-    load_balancer: Arc<LoadBalancerType>,  // Changed from Arc<dyn LoadBalancer>
+    load_balancer: Arc<dyn load_balancer::LoadBalancer>, 
     health_checker: Arc<HealthChecker>,
     circuit_breakers: Arc<CircuitBreakerManager>,
     retry_strategy: RetryStrategy,
@@ -296,13 +296,13 @@ impl Proxy {
         *req.uri_mut() = new_uri;
         
         // Add proxy headers
-        req.headers_mut().insert(
-            "x-forwarded-for",
-            req.headers()
-                .get("x-real-ip")
-                .cloned()
-                .unwrap_or_else(|| "unknown".parse().unwrap()),
-        );
+        let real_ip = req
+            .headers()
+            .get("x-real-ip")
+            .cloned()
+            .unwrap_or_else(|| "unknown".parse().unwrap());
+        req.headers_mut().insert("x-forwarded-for", real_ip);
+
         req.headers_mut().insert(
             "x-request-id",
             request_id.to_string().parse().unwrap(),
