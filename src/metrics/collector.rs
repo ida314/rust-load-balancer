@@ -1,9 +1,7 @@
 // src/metrics/collector.rs
-
 use prometheus::{
-    Counter, CounterVec, Encoder, Gauge, GaugeVec, Histogram, HistogramOpts,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
-    TextEncoder,
+    Encoder, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, HistogramVec, HistogramOpts,
+    IntGaugeVec as _, Opts, Registry, TextEncoder,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -80,10 +78,7 @@ impl MetricsCollector {
         registry.register(Box::new(request_duration_seconds.clone()))?;
         
         let request_size_bytes = HistogramVec::new(
-            HistogramOpts::new(
-                "lb_request_size_bytes",
-                "Request size in bytes",
-            ),
+            HistogramOpts::new("lb_request_size_bytes", "Request size in bytes"),
             &["method"],
         )?;
         registry.register(Box::new(request_size_bytes.clone()))?;
@@ -114,13 +109,19 @@ impl MetricsCollector {
         registry.register(Box::new(backend_request_duration_seconds.clone()))?;
         
         let backend_connections_active = IntGaugeVec::new(
-            Opts::new("lb_backend_connections_active", "Active backend connections"),
+            Opts::new(
+                "lb_backend_connections_active",
+                "Active backend connections",
+            ),
             &["backend"],
         )?;
         registry.register(Box::new(backend_connections_active.clone()))?;
         
         let backend_health_status = IntGaugeVec::new(
-            Opts::new("lb_backend_health_status", "Backend health status (1=healthy, 0=unhealthy)"),
+            Opts::new(
+                "lb_backend_health_status",
+                "Backend health status (1=healthy, 0=unhealthy)",
+            ),
             &["backend"],
         )?;
         registry.register(Box::new(backend_health_status.clone()))?;
@@ -136,25 +137,25 @@ impl MetricsCollector {
         registry.register(Box::new(circuit_breaker_state.clone()))?;
         
         let circuit_breaker_failures_total = IntCounterVec::new(
-            Opts::new("lb_circuit_breaker_failures_total", "Total circuit breaker failures"),
+            Opts::new(
+                "lb_circuit_breaker_failures_total",
+                "Total circuit breaker failures",
+            ),
             &["backend"],
         )?;
         registry.register(Box::new(circuit_breaker_failures_total.clone()))?;
         
         // System metrics
-        let active_connections = IntGauge::new(
-            Opts::new("lb_active_connections", "Total active connections"),
-        )?;
+        let active_connections =
+            IntGauge::new("lb_active_connections", "Total active connections")?;
         registry.register(Box::new(active_connections.clone()))?;
         
-        let healthy_backends = IntGauge::new(
-            Opts::new("lb_healthy_backends", "Number of healthy backends"),
-        )?;
+        let healthy_backends =
+            IntGauge::new("lb_healthy_backends", "Number of healthy backends")?;
         registry.register(Box::new(healthy_backends.clone()))?;
         
-        let total_backends = IntGauge::new(
-            Opts::new("lb_total_backends", "Total number of backends"),
-        )?;
+        let total_backends =
+            IntGauge::new("lb_total_backends", "Total number of backends")?;
         registry.register(Box::new(total_backends.clone()))?;
         
         Ok(Self {
@@ -207,28 +208,7 @@ impl MetricsCollector {
             .observe(duration.as_secs_f64());
     }
     
-    pub fn update_backend_counts(&self, healthy: usize, total: usize) {
-        self.healthy_backends.set(healthy as i64);
-        self.total_backends.set(total as i64);
-    }
-}
-
-// Helper for timing operations
-pub struct Timer {
-    start: Instant,
-}
-
-impl Timer {
-    pub fn new() -> Self {
-        Self {
-            start: Instant::now(),
-        }
-    }
-    
-    pub fn elapsed(&self) -> std::time::Duration {
-        self.start.elapsed()
-    }
-}connections(&self, backend: &str, count: i64) {
+    pub fn update_backend_connections(&self, backend: &str, count: i64) {
         self.backend_connections_active
             .with_label_values(&[backend])
             .set(count);
@@ -265,4 +245,25 @@ impl Timer {
         self.active_connections.dec();
     }
     
-    pub fn update_backend_
+    pub fn update_backend_counts(&self, healthy: usize, total: usize) {
+        self.healthy_backends.set(healthy as i64);
+        self.total_backends.set(total as i64);
+    }
+}
+
+// Helper for timing operations
+pub struct Timer {
+    start: Instant,
+}
+
+impl Timer {
+    pub fn new() -> Self {
+        Self {
+            start: Instant::now(),
+        }
+    }
+    
+    pub fn elapsed(&self) -> std::time::Duration {
+        self.start.elapsed()
+    }
+}
