@@ -14,5 +14,3 @@ pub trait LoadBalancer: Send + Sync {
     
     fn name(&self) -> &'static str;
 }
-
-pub use crate::config::LoadBalancerAlgorithm;
