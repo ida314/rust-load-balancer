@@ -45,12 +45,16 @@ impl HealthChecker {
         let mut interval = interval(self.config.interval());
         let mut shutdown_rx = self.shutdown_rx.clone();
         
-        info!("Starting health checker with interval: {:?}", self.config.interval());
+        info!(
+            "Starting health checker with interval: {:?}", 
+            self.config.interval()
+        );
         
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    self.check_all_backends().await;
+                    // pass an Arc<Self> so the method can clone internally for spawning
+                    self.clone().check_all_backends().await;
                 }
                 _ = shutdown_rx.changed() => {
                     if *shutdown_rx.borrow() {
@@ -66,7 +70,7 @@ impl HealthChecker {
         let _ = self.shutdown_tx.send(true);
     }
     
-    async fn check_all_backends(&self) {
+    async fn check_all_backends(self: Arc<Self>) {
         let backends = self.pool.all_backends();
         let mut tasks = Vec::new();
         
@@ -79,8 +83,7 @@ impl HealthChecker {
         }
         
         // Wait for all health checks to complete
-        let results: Vec<Result<HealthCheckResult, _>> = 
-            futures::future::join_all(tasks).await;
+        let results = futures::future::join_all(tasks).await; // Vec<Result<Result<HealthCheckResult, anyhow::Error>, JoinError>>
         
         // Process results
         let mut healthy_count = 0;
@@ -94,8 +97,11 @@ impl HealthChecker {
                         debug!("Backend {} is healthy", check_result.backend_id);
                     } else {
                         unhealthy_count += 1;
-                        warn!("Backend {} is unhealthy: {:?}", 
-                              check_result.backend_id, check_result.error);
+                        warn!(
+                            "Backend {} is unhealthy: {:?}", 
+                            check_result.backend_id, 
+                            check_result.error
+                        );
                     }
                 }
                 Ok(Err(e)) => {
@@ -112,13 +118,18 @@ impl HealthChecker {
         // Update the healthy backends list
         self.pool.update_healthy_backends().await;
         
-        info!("Health check complete: {} healthy, {} unhealthy", 
-              healthy_count, unhealthy_count);
+        info!(
+            "Health check complete: {} healthy, {} unhealthy", 
+            healthy_count, unhealthy_count
+        );
     }
     
     async fn check_backend(&self, backend: Arc<Backend>) -> Result<HealthCheckResult> {
         let start = std::time::Instant::now();
         let url = backend.url.join(&self.config.path)?;
+        
+        // Read previous health state for transition logging
+        let was_healthy = backend.is_healthy().await;
         
         let result = timeout(
             self.config.timeout(),
@@ -143,22 +154,26 @@ impl HealthChecker {
         // Update backend health status
         backend.update_health(healthy).await;
         
-        // Check thresholds
+        // Transition logging using helpers and previous state
         if healthy {
-            let successes = backend.consecutive_successes.load(std::sync::atomic::Ordering::Relaxed);
-            if successes >= self.config.healthy_threshold as usize {
-                if !backend.is_healthy().await {
-                    info!("Backend {} is now healthy after {} consecutive successes", 
-                          backend.id, successes);
-                }
+            if backend.is_stably_healthy(self.config.healthy_threshold as usize)
+                && !was_healthy
+            {
+                info!(
+                    "Backend {} is now healthy after {} consecutive successes", 
+                    backend.id, 
+                    backend.consecutive_successes()
+                );
             }
         } else {
-            let failures = backend.consecutive_failures.load(std::sync::atomic::Ordering::Relaxed);
-            if failures >= self.config.unhealthy_threshold as usize {
-                if backend.is_healthy().await {
-                    warn!("Backend {} is now unhealthy after {} consecutive failures", 
-                          backend.id, failures);
-                }
+            if backend.is_stably_unhealthy(self.config.unhealthy_threshold as usize)
+                && was_healthy
+            {
+                warn!(
+                    "Backend {} is now unhealthy after {} consecutive failures", 
+                    backend.id, 
+                    backend.consecutive_failures()
+                );
             }
         }
         
