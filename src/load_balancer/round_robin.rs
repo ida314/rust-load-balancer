@@ -1,5 +1,5 @@
 // src/load_balancer/round_robin.rs
-use super::algorithm::LoadBalancer;
+use crate::load_balancer::LoadBalancer;
 use crate::proxy::Backend;
 use async_trait::async_trait;
 use std::net::SocketAddr;
