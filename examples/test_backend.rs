@@ -79,52 +79,71 @@ async fn handle(
         .unwrap())
 }
 
+// ——————————————————————————————————————————
+// Main
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
+    // ── Parse args / env ─────────────────────────────────────────────
     let port: u16 = std::env::args()
         .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(8001);
-    
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    
+        .unwrap_or_else(|| "8001".into())
+        .parse()?;
+    let name = std::env::args()
+        .nth(2)
+        .or_else(|| std::env::var("BACKEND_NAME").ok())
+        .unwrap_or_else(|| format!("backend-{port}"));
+
+    let base_delay =
+        std::env::var("BASE_DELAY_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let jitter_ms =
+        std::env::var("JITTER_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let fail_pct =
+        std::env::var("FAIL_PCT").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+
+    // ── Shared state ────────────────────────────────────────────────
     let state = BackendState {
         port,
-        request_count: Arc::new(AtomicU64::new(0)),
-        healthy: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        name: name.clone(),
+        req_counter: Arc::new(AtomicU64::new(0)),
+        healthy_flag: Arc::new(AtomicBool::new(true)),
+        base_delay,
+        jitter_ms,
+        fail_pct,
     };
-    
-    // Clone for the control task
-    let control_state = state.clone();
-    
-    // Spawn a task to toggle health status (for testing)
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_secs(30)).await;
-            let current = control_state.healthy.load(Ordering::SeqCst);
-            control_state.healthy.store(!current, Ordering::SeqCst);
-            println!("[Backend {}] Health status changed to: {}", 
-                     control_state.port, !current);
-        }
-    });
-    
+
+    // Toggle health every 30 s (demo)
+    {
+        let st = state.clone();
+        tokio::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(30)).await;
+                let cur = st.healthy_flag.load(Ordering::SeqCst);
+                st.healthy_flag.store(!cur, Ordering::SeqCst);
+                println!(
+                    "[{}] Health flipped → {}",
+                    st.name,
+                    if !cur { "healthy" } else { "unhealthy" }
+                );
+            }
+        });
+    }
+
+    // ── Hyper server ────────────────────────────────────────────────
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let make_svc = make_service_fn(move |_conn| {
-        let state = state.clone();
+        let st = state.clone();
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                handle_request(req, state.clone())
+                handle(req, st.clone())
             }))
         }
     });
-    
-    let server = Server::bind(&addr).serve(make_svc);
-    
-    println!("Test backend server listening on http://{}", addr);
-    println!("Health endpoint: http://{}/health", addr);
-    
-    if let Err(e) = server.await {
-        eprintln!("Server error: {}", e);
-    }
-    
+
+    println!(
+        "Mock backend '{}' on http://{}  [delay={}ms±{} fail={} %]",
+        name, addr, base_delay, jitter_ms, fail_pct
+    );
+
+    Server::bind(&addr).serve(make_svc).await?;
     Ok(())
 }
