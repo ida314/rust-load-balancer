@@ -1,37 +1,45 @@
-// examples/test_backend.rs
-// Run with: cargo run --example test_backend -- <port>
+//! examples/test_backend.rs
+//! Run: cargo run --example test_backend -- <port> [name]
 
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server, StatusCode};
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Body, Request, Response, Server, StatusCode,
+};
+use rand::Rng;
+use std::{
+    convert::Infallible,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::time::sleep;
 
 #[derive(Clone)]
 struct BackendState {
-    port: u16,
-    request_count: Arc<AtomicU64>,
-    // Simulate unhealthy state
-    healthy: Arc<std::sync::atomic::AtomicBool>,
+    port:         u16,
+    name:         String,
+    req_counter:  Arc<AtomicU64>,
+    healthy_flag: Arc<AtomicBool>,
+    base_delay:   u64,
+    jitter_ms:    u64,
+    fail_pct:     f64,
 }
 
-async fn handle_request(
+// ——————————————————————————————————————————
+// Request handler
+async fn handle(
     req: Request<Body>,
     state: BackendState,
 ) -> Result<Response<Body>, Infallible> {
-    let count = state.request_count.fetch_add(1, Ordering::SeqCst) + 1;
-    let path = req.uri().path();
-    
-    println!("[Backend {}] Request #{}: {} {}", 
-             state.port, count, req.method(), path);
-    
-    // Handle health check endpoint
+    let n = state.req_counter.fetch_add(1, Ordering::SeqCst) + 1;
+    let path = req.uri().path().to_owned();
+
+    // /health is always fast
     if path == "/health" {
-        let healthy = state.healthy.load(Ordering::SeqCst);
-        if healthy {
+        if state.healthy_flag.load(Ordering::SeqCst) {
             return Ok(Response::new(Body::from("OK")));
         } else {
             return Ok(Response::builder()
@@ -40,20 +48,33 @@ async fn handle_request(
                 .unwrap());
         }
     }
-    
-    // Simulate some processing time
-    sleep(Duration::from_millis(50)).await;
-    
-    // Return response with backend identifier
+
+    // Simulate latency
+    let delay =
+        state.base_delay + rand::thread_rng().gen_range(0..=state.jitter_ms);
+    if delay > 0 {
+        sleep(Duration::from_millis(delay)).await;
+    }
+
+    // Simulate failure
+    if state.fail_pct > 0.0
+        && rand::thread_rng().gen_bool(state.fail_pct / 100.0)
+    {
+        return Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from("Injected failure"))
+            .unwrap());
+    }
+
     let body = format!(
-        "{{\"backend\": {}, \"request_count\": {}, \"path\": \"{}\"}}",
-        state.port, count, path
+        r#"{{"backend":"{}","port":{},"req":{},"path":"{}","delay_ms":{}}}"#,
+        state.name, state.port, n, path, delay
     );
-    
+
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .header("X-Backend-Port", state.port.to_string())
+        .header("X-Backend-Name", state.name.clone())
         .body(Body::from(body))
         .unwrap())
 }
