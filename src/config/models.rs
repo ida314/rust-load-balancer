@@ -20,6 +20,15 @@ impl Config {
             bail!("At least one backend must be configured");
         }
         
+        // Check for duplicate backend IDs
+        let mut ids = std::collections::HashSet::new();
+        for backend in &self.backends {
+            let id = backend.id_or_default();
+            if !ids.insert(id.clone()) {
+                bail!("Duplicate backend ID: {}", id);
+            }
+        }
+        
         for (i, backend) in self.backends.iter().enumerate() {
             if backend.weight == 0 {
                 bail!("Backend {} has invalid weight: 0", i);
@@ -52,6 +61,9 @@ pub struct LoadBalancerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum LoadBalancerAlgorithm {
     RoundRobin,
+    WeightedRoundRobin,  // Add this for the benchmarks
+    LeastConnections,    // Optional: add more algorithms
+    IpHash,             // Optional: add more algorithms
 }
 
 fn default_algorithm() -> LoadBalancerAlgorithm {
@@ -60,11 +72,23 @@ fn default_algorithm() -> LoadBalancerAlgorithm {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BackendConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,  // Add ID field
     pub url: Url,
     #[serde(default = "default_weight")]
     pub weight: u32,
     #[serde(default = "default_max_connections")]
     pub max_connections: usize,
+}
+
+impl BackendConfig {
+    /// Get the ID or generate one from the URL
+    pub fn id_or_default(&self) -> String {
+        self.id.clone().unwrap_or_else(|| {
+            // Generate ID from URL host and port
+            format!("backend-{}", self.url.port().unwrap_or(80))
+        })
+    }
 }
 
 fn default_weight() -> u32 {
