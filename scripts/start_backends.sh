@@ -2,6 +2,8 @@
 # Start mock backends for the Rust load balancer
 set -Eeuo pipefail
 
+ulimit -n 10000 2>/dev/null || echo "⚠️  could not raise nofile limit"
+
 DEFAULT_PORTS="8001,8002,8003"
 DEFAULT_LOG_DIR="run_backends/$(date +%Y%m%d_%H%M%S)"
 

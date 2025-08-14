@@ -2,6 +2,8 @@
 # scripts/run_lb.sh — Start the Rust load balancer (and optional mock backends)
 set -Eeuo pipefail
 
+ulimit -n 10000 2>/dev/null || echo "⚠️  could not raise nofile limit"
+
 # ──────────────────────────────
 # Configurable defaults
 # ──────────────────────────────
