@@ -1,7 +1,7 @@
 // src/metrics/collector.rs
 use prometheus::{
-    Encoder, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, HistogramVec, HistogramOpts,
-    IntGaugeVec as _, Opts, Registry, TextEncoder,
+    Encoder, IntCounterVec, IntGauge, IntGaugeVec, HistogramVec, HistogramOpts,
+    Opts, Registry, TextEncoder,
 };
 use std::sync::Arc;
 use std::time::Instant;
