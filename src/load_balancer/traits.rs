@@ -1,0 +1,16 @@
+// src/load_balancer/traits.rs
+use crate::proxy::Backend;
+use async_trait::async_trait;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+#[async_trait]
+pub trait LoadBalancer: Send + Sync {
+    /// Select a backend based on the load balancing algorithm
+    async fn select_backend(
+        &self,
+        backends: &[Arc<Backend>],
+        client_addr: Option<SocketAddr>,
+    ) -> Option<Arc<Backend>>;
+    fn name(&self) -> &'static str;
+}
