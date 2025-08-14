@@ -1,44 +1,38 @@
-# config.yaml - Example Load Balancer Configuration
-
-# Load balancing algorithm
+# config.yaml
 load_balancer:
-  algorithm: "round_robin"
+  algorithm: "weighted_round_robin"
 
-# Backend servers
 backends:
-  - url: "http://localhost:8001"
-    weight: 1
-    max_connections: 100
-    
-  - url: "http://localhost:8002"
+  - id: "backend-8001"
+    url: "http://127.0.0.1:8001"
     weight: 2
-    max_connections: 100
-    
-  - url: "http://localhost:8003"
+    max_connections: 10000
+  - id: "backend-8002"
+    url: "http://127.0.0.1:8002"
     weight: 1
-    max_connections: 100
+    max_connections: 10000
+  - id: "backend-8003"
+    url: "http://127.0.0.1:8003"
+    weight: 1
+    max_connections: 10000
 
-# Health check configuration
 health_check:
-  interval_secs: 10        # How often to check backend health
-  timeout_secs: 3          # Timeout for health check requests
-  unhealthy_threshold: 3   # Consecutive failures before marking unhealthy
-  healthy_threshold: 2     # Consecutive successes before marking healthy
-  path: "/health"          # Health check endpoint path
+  interval_secs: 5
+  timeout_secs: 2
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+  path: "/health"
 
-# Circuit breaker configuration
 circuit_breaker:
-  failure_threshold: 5     # Failures before opening circuit
-  success_threshold: 2     # Successes in half-open before closing
-  timeout_secs: 60        # Time to wait before half-open state
+  failure_threshold: 5
+  success_threshold: 2
+  timeout_secs: 60
 
-# Retry configuration
 retry:
-  max_attempts: 3         # Maximum retry attempts
-  backoff_base_ms: 100    # Base backoff time in milliseconds
-  backoff_max_ms: 5000    # Maximum backoff time
+  max_attempts: 3
+  backoff_base_ms: 100
+  backoff_max_ms: 5000
 
-# Metrics configuration
 metrics:
   enabled: true
   port: 9090
