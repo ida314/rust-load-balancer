@@ -1,4 +1,5 @@
 // src/health/checker.rs
+use crate::metrics::MetricsCollector;
 use crate::config::HealthCheckConfig;
 use crate::proxy::{Backend, BackendPool};
 use anyhow::Result;
@@ -11,9 +12,11 @@ pub struct HealthChecker {
     config: HealthCheckConfig,
     pool: Arc<BackendPool>,
     client: Client,
+    metrics: Option<Arc<MetricsCollector>>, // Add this field
     shutdown_tx: tokio::sync::watch::Sender<bool>,
     shutdown_rx: tokio::sync::watch::Receiver<bool>,
 }
+
 
 #[derive(Debug)]
 pub struct HealthCheckResult {
@@ -24,7 +27,11 @@ pub struct HealthCheckResult {
 }
 
 impl HealthChecker {
-    pub fn new(config: HealthCheckConfig, pool: Arc<BackendPool>) -> Self {
+    pub fn new(
+        config: HealthCheckConfig, 
+        pool: Arc<BackendPool>,
+        metrics: Option<Arc<MetricsCollector>>, // Add parameter
+    ) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
@@ -36,6 +43,7 @@ impl HealthChecker {
             config,
             pool,
             client,
+            metrics, // Store it
             shutdown_tx,
             shutdown_rx,
         }
@@ -118,6 +126,13 @@ impl HealthChecker {
         // Update the healthy backends list
         self.pool.update_healthy_backends().await;
         
+        // Update metrics with counts
+        if let Some(metrics) = &self.metrics {
+            let healthy_count = self.pool.get_healthy_backends().await.len();
+            let total_count = self.pool.all_backends().len();
+            metrics.update_backend_counts(healthy_count, total_count);
+        }
+        
         info!(
             "Health check complete: {} healthy, {} unhealthy", 
             healthy_count, unhealthy_count
@@ -153,6 +168,11 @@ impl HealthChecker {
         
         // Update backend health status
         backend.update_health(healthy).await;
+        
+        //update metrics
+        if let Some(metrics) = &self.metrics {
+            metrics.update_backend_health(&backend.id, healthy);
+        }
         
         // Transition logging using helpers and previous state
         if healthy {
