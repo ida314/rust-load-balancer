@@ -1,9 +1,5 @@
-//
-// src/proxy/proxy.rs
-//
-
 use crate::{
-    circuit_breaker::{CircuitBreakerManager},
+    circuit_breaker::CircuitBreakerManager,
     config::Config,
     health::HealthChecker,
     load_balancer,
@@ -23,7 +19,7 @@ use uuid::Uuid;
 pub struct Proxy {
     config: Config,
     pool: Arc<BackendPool>,
-    load_balancer: Arc<dyn load_balancer::LoadBalancer>, 
+    load_balancer: Arc<dyn load_balancer::LoadBalancer>,
     health_checker: Arc<HealthChecker>,
     circuit_breakers: Arc<CircuitBreakerManager>,
     retry_strategy: RetryStrategy,
@@ -37,11 +33,23 @@ impl Proxy {
         pool: Arc<BackendPool>,
         metrics: Arc<MetricsCollector>,
     ) -> Self {
+        // Create HTTP client with proper settings
+        let mut http = HttpConnector::new();
+        http.set_connect_timeout(Some(Duration::from_secs(5)));
+        http.set_keepalive(Some(Duration::from_secs(60)));
+
+        let client = Client::builder()
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(50)
+            .build::<_, Body>(http);
+        
         let load_balancer = load_balancer::create_load_balancer(config.load_balancer.algorithm);
         
+        // Pass metrics to HealthChecker
         let health_checker = Arc::new(HealthChecker::new(
             config.health_check.clone(),
             pool.clone(),
+            Some(metrics.clone()),
         ));
         
         let circuit_breakers = Arc::new(CircuitBreakerManager::new(
@@ -49,11 +57,6 @@ impl Proxy {
         ));
         
         let retry_strategy = RetryStrategy::new(config.retry.clone());
-        
-        let client = Client::builder()
-            .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(10)
-            .build_http();
         
         // Update metrics with initial backend count
         let backends = pool.all_backends();
@@ -82,6 +85,16 @@ impl Proxy {
         let request_id = Uuid::new_v4();
         let timer = Timer::new();
         
+        // Record request size
+        let method = req.method().clone();
+        if let Some(content_length) = req.headers().get("content-length") {
+            if let Ok(size) = content_length.to_str().unwrap_or("0").parse::<f64>() {
+                self.metrics.request_size_bytes
+                    .with_label_values(&[method.as_str()])
+                    .observe(size);
+            }
+        }
+        
         // Extract client address for IP hash algorithm
         let client_addr = req
             .headers()
@@ -90,7 +103,6 @@ impl Proxy {
             .and_then(|s| s.split(',').next())
             .and_then(|s| s.trim().parse().ok());
         
-        let method = req.method().clone();
         let uri_path = req.uri().path().to_string();
         
         info!(
@@ -106,7 +118,7 @@ impl Proxy {
         
         self.metrics.decrement_active_connections();
         
-        // Record metrics
+        // Record metrics including response size
         match &result {
             Ok(response) => {
                 let status = response.status().as_u16();
@@ -115,6 +127,15 @@ impl Proxy {
                     .get("x-backend-id")
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("unknown");
+                
+                // Record response size
+                if let Some(content_length) = response.headers().get("content-length") {
+                    if let Ok(size) = content_length.to_str().unwrap_or("0").parse::<f64>() {
+                        self.metrics.response_size_bytes
+                            .with_label_values(&[method.as_str(), &status.to_string()])
+                            .observe(size);
+                    }
+                }
                 
                 self.metrics.record_request(
                     method.as_str(),
@@ -131,7 +152,7 @@ impl Proxy {
                     "Request completed"
                 );
             }
-            Err(e) => {
+            Err(_e) => {
                 self.metrics.record_request(
                     method.as_str(),
                     503,
@@ -141,7 +162,7 @@ impl Proxy {
                 
                 error!(
                     request_id = %request_id,
-                    error = %e,
+                    error = %_e,
                     duration_ms = timer.elapsed().as_millis(),
                     "Request failed"
                 );
@@ -285,13 +306,24 @@ impl Proxy {
     ) -> Result<Response<Body>, ProxyError> {
         let timer = Timer::new();
         
-        // Rewrite URI to point to backend
-        let uri = req.uri();
-        let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+        // Get the path and query from the original request
+        let path_and_query = req.uri()
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/");
         
-        let new_uri = format!("{}{}", backend.url, path_and_query)
+        // Parse backend URL and replace only the path and query
+        let backend_uri = backend.url.as_str()
             .parse::<Uri>()
-            .map_err(|e| ProxyError::InvalidUri(e.to_string()))?;
+            .map_err(|e| ProxyError::InvalidUri(format!("Invalid backend URL: {}", e)))?;
+        
+        // Build new URI with backend's scheme/authority but request's path/query
+        let new_uri = Uri::builder()
+            .scheme(backend_uri.scheme().unwrap().clone())
+            .authority(backend_uri.authority().unwrap().clone())
+            .path_and_query(path_and_query)
+            .build()
+            .map_err(|e| ProxyError::InvalidUri(format!("Failed to build URI: {}", e)))?;
         
         *req.uri_mut() = new_uri;
         
@@ -348,7 +380,6 @@ impl Proxy {
     }
 }
 
-// Error types remain the same
 #[derive(Debug, thiserror::Error)]
 pub enum ProxyError {
     #[error("No healthy backends available")]
