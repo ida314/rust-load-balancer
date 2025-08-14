@@ -1,4 +1,5 @@
 // src/proxy/backend.rs
+use crate::config::BackendConfig;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use url::Url;
@@ -29,18 +30,18 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(url: Url, weight: u32, max_connections: usize) -> Self {
+    pub fn new(config: &BackendConfig) -> Self {
         let id = format!(
             "{}:{}",
-            url.host_str().unwrap_or("unknown"),
-            url.port_or_known_default().unwrap_or(80)
+            config.url.host_str().unwrap_or("unknown"),
+            config.url.port_or_known_default().unwrap_or(80)
         );
         
         Self {
             id,
-            url,
-            weight,
-            max_connections,
+            url: config.url.clone(),
+            weight: config.weight,
+            max_connections: config.max_connections,
             active_connections: AtomicUsize::new(0),
             total_requests: AtomicU64::new(0),
             failed_requests: AtomicU64::new(0),

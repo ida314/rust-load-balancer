@@ -1,13 +1,11 @@
 //
 // src/proxy/pool.rs
 //
-
 use super::backend::Backend;
 use crate::config::BackendConfig;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use url::Url;
 
 #[derive(Clone)]
 pub struct BackendPool {
@@ -21,12 +19,7 @@ impl BackendPool {
         let mut healthy = Vec::new();
         
         for config in configs {
-            let backend = Arc::new(Backend::new(
-                config.url.clone(),
-                config.weight,
-                config.max_connections,
-            ));
-            
+            let backend = Arc::new(Backend::new(&config));
             backends.insert(backend.id.clone(), backend.clone());
             healthy.push(backend);
         }
@@ -68,20 +61,19 @@ impl BackendPool {
         );
     }
     
-    pub async fn add_backend(&self, url: Url, weight: u32, max_connections: usize) {
-        let backend = Arc::new(Backend::new(url, weight, max_connections));
-        let id = backend.id.clone();
-        
-        self.backends.insert(id, backend.clone());
-        
-        // Initially mark as unhealthy until health check passes
-        backend.update_health(false).await;
-        
-        tracing::info!("Added new backend: {}", backend.id);
-    }
+    pub async fn add_backend(&self, config: BackendConfig) {
+            let backend = Arc::new(Backend::new(&config));
+            let id = backend.id.clone();
+            
+            self.backends.insert(id.clone(), backend.clone());
+            
+            // Initially mark as unhealthy until health check passes
+            backend.update_health(false).await;
+            tracing::info!("Added new backend: {}", id);
+        }
     
     pub async fn remove_backend(&self, id: &str) -> bool {
-        if let Some((_, backend)) = self.backends.remove(id) {
+        if let Some((_, _backend)) = self.backends.remove(id) {
             // Remove from healthy list
             let mut healthy = self.healthy_backends.write().await;
             healthy.retain(|b| b.id != id);
