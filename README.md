@@ -6,6 +6,7 @@ A HTTP load balancer written in Rust with advanced features for reliability and 
 
 - **Multiple Load Balancing Algorithms**
   - Round Robin
+  **Expanding to**
   - Least Connections
   - Weighted Random
   - Random
@@ -36,6 +37,7 @@ A HTTP load balancer written in Rust with advanced features for reliability and 
   - Hot-reloadable configuration (future enhancement)
 
 ## Building and Running
+
 
 ### Prerequisites
 
