@@ -28,3 +28,4 @@ flamegraph.svg
 # dotenv 
 .env
 .env.*
+tmp.txt
