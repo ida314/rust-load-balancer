@@ -212,14 +212,6 @@ The load balancer is built with a modular, component-based architecture:
 - [ ] Request logging to file/syslog
 - [ ] Admin API for runtime management
 
-## Contributing
-
-Contributions are welcome! Please ensure:
-- Code follows Rust idioms and best practices
-- All tests pass (`cargo test`)
-- Code is formatted (`cargo fmt`)
-- No clippy warnings (`cargo clippy`)
-
 ## License
 
 MIT
